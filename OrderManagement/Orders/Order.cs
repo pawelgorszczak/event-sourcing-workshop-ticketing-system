@@ -3,33 +3,33 @@ using OrderManagement.Orders.ValueObjects;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-//using Marten.Schema;
 
 namespace OrderManagement.Orders;
-
-public record ReservedTicket(string ConcertId, string TicketLevel, int Quantity);
 
 public enum OrderStatus { Pending, Confirmed, Paid, Cancelled }
 
 public class Order: Aggregate
 {
-    public string UserId { get; private set; }
-    public OrderStatus Status { get; private set; }
-    public decimal TotalAmount { get; private set; }
-    public IReadOnlyList<ReservedTicket> ReservedTickets { get; private set; } = new List<ReservedTicket>();
-    public string? PaymentTransactionId { get; private set; }
-    public CustomerInfo CustomerInfo { get; private set; }
-    public bool IsConfirmed { get; private set; }
-    public bool IsPaymentSucceeded { get; private set; }
-    public string TransactionId { get; private set; }
+    private List<ReservedTicket> _reservedTicketsSource = new List<ReservedTicket>();
+    private List<OrderItem> _orderItems = new List<OrderItem>();
+    public string UserId { get; private set; } = default!;
+    public OrderStatus Status { get; private set; } = default!;
+    public decimal TotalAmount { get; private set; } = default!;
+    public IReadOnlyList<ReservedTicket> ReservedTickets => _reservedTicketsSource.AsReadOnly();
+    public IReadOnlyList<ReservedTicket> OrderItems => _reservedTicketsSource.AsReadOnly();
+    public string? PaymentTransactionId { get; private set; } = default!;
+    public CustomerInfo CustomerInfo { get; private set; } = default!;
+    public bool IsConfirmed { get; private set; } = default!;
+    public bool IsPaymentSucceeded { get; private set; } = default!;
+    public string TransactionId { get; private set; } = default!;
 
     private Order() { } // For Marten
 
-    public Order(string id, string userId, CustomerInfo customerInfo)
+    public Order(string id, string userId, List<OrderItem> orderItems, CustomerInfo customerInfo)
     {
         Id = id;
         UserId = userId;
-        ApplyAndEnqueue(new OrderCreated(id, userId, CustomerInfo));
+        ApplyAndEnqueue(new OrderCreated(id, userId, orderItems, customerInfo));
     }
 
     public void AddReservedTickets(IEnumerable<ReservedTicket> reservedTickets)
@@ -52,24 +52,24 @@ public class Order: Aggregate
         ApplyAndEnqueue(new OrderConfirmed(Id));
     }
 
-    public void ProcessPaymentSuccess(decimal amount, string transactionId)
+    public void ProcessPaymentSuccess(string transactionId)
     {
         if (Status != OrderStatus.Confirmed)
         {
             throw new InvalidOperationException("The payment can only be processed when the order is in confirmed status.");
         }
 
-        ApplyAndEnqueue(new PaymentSucceeded(Id, amount, transactionId));
+        ApplyAndEnqueue(new PaymentSucceeded(Id, transactionId));
     }
 
-    public void ProcessPaymentFailure(string transactionId)
+    public void ProcessPaymentFailure(string transactionId, string reason)
     {
         if (Status != OrderStatus.Confirmed)
         {
             throw new InvalidOperationException("The payment failure can only be processed when the order is in confirmed status.");
         }
 
-        ApplyAndEnqueue(new PaymentFailed(Id, transactionId));
+        ApplyAndEnqueue(new PaymentFailed(Id, transactionId, reason));
     }
 
     public void CancelOrder()
@@ -95,10 +95,10 @@ public class Order: Aggregate
     private void Apply(OrderCreated e)
     {
         Id = e.OrderId;
-        _tickets = e.Tickets;
-        _userId = e.UserId;
-        _customerInfo = e.CustomerInfo;
-        _status = OrderStatus.Created;
+        UserId = e.UserId;
+        _orderItems.AddRange(e.OrderItems);
+        CustomerInfo = e.CustomerInfo;
+        Status = OrderStatus.Pending;
     }
 
     private void Apply(OrderCancelled e)
@@ -113,7 +113,7 @@ public class Order: Aggregate
 
     private void Apply(ReservedTicketsAdded e)
     {
-        _reservedTickets.AddRange(e.ReservedTickets);
+        _reservedTicketsSource.AddRange(e.ReservedTickets);
     }
 
     private void Apply(OrderConfirmed e)
@@ -130,69 +130,6 @@ public class Order: Aggregate
     private void Apply(PaymentFailed e)
     {
         IsPaymentSucceeded = false;
-        TransactionId = null;
-    }
-}
-
-public record ReservedTicket(string ConcertId, string TicketLevel, int Quantity, decimal Price);
-public record ReservedTicketsAdded(string OrderId, List<ReservedTicket> ReservedTickets);
-public record OrderConfirmed(string OrderId);
-public record PaymentSucceeded(string OrderId, decimal Amount, string TransactionId);
-public record PaymentFailed(string OrderId, decimal Amount, string Reason);
-
-public record AddReservedTicketsCommand(string OrderId, IEnumerable<ReservedTicket> ReservedTickets);
-public record ConfirmOrderCommand(string OrderId);
-public record ProcessPaymentSuccessCommand(string OrderId, decimal Amount, string TransactionId);
-public record ProcessPaymentFailureCommand(string OrderId, decimal Amount, string Reason);
-
-public class OrderCommandHandler
-{
-    private readonly IEventStore eventStore;
-
-    public OrderCommandHandler(IEventStore eventStore)
-    {
-        this.eventStore = eventStore;
-    }
-
-    public async Task HandleAsync(AddReservedTicketsCommand command)
-    {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.AddReservedTickets(command.ReservedTickets);
-        await eventStore.SaveChangesAsync();
-    }
-
-    public async Task HandleAsync(ConfirmOrderCommand command)
-    {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.ConfirmOrder();
-        await eventStore.SaveChangesAsync();
-    }
-
-    public async Task HandleAsync(ProcessPaymentSuccessCommand command)
-    {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.ProcessPaymentSuccess(command.Amount, command.TransactionId);
-        await eventStore.SaveChangesAsync();
-    }
-
-    public async Task HandleAsync(ProcessPaymentFailureCommand command)
-    {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.ProcessPaymentFailure(command.Amount, command.Reason);
-        await eventStore.SaveChangesAsync();
-    } 
-    
-    public async Task HandleAsync(CancelOrderCommand command)
-    {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.CancelOrder();
-        await eventStore.SaveChangesAsync();
-    }
-
-    public async Task HandleAsync(CancelOrderDueToTimeoutCommand command)
-    {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.CancelOrderDueToTimeout();
-        await eventStore.SaveChangesAsync();
+        TransactionId = default!;
     }
 }
