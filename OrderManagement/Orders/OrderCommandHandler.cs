@@ -1,4 +1,3 @@
-/*using Marten.Schema;
 using Core.EventStore;
 
 namespace OrderManagement.Orders;
@@ -14,44 +13,43 @@ public class OrderCommandHandler
 
     public async Task HandleAsync(AddReservedTicketsCommand command)
     {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
+        var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.AddReservedTickets(command.ReservedTickets);
         await eventStore.SaveChangesAsync();
     }
 
     public async Task HandleAsync(ConfirmOrderCommand command)
     {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
+        var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.ConfirmOrder();
         await eventStore.SaveChangesAsync();
     }
 
     public async Task HandleAsync(ProcessPaymentSuccessCommand command)
     {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.ProcessPaymentSuccess(command.Amount, command.TransactionId);
+        var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
+        order.ProcessPaymentSuccess(command.TransactionId);
         await eventStore.SaveChangesAsync();
     }
 
     public async Task HandleAsync(ProcessPaymentFailureCommand command)
     {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
-        order.ProcessPaymentFailure(command.Amount, command.Reason);
+        var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
+        order.ProcessPaymentFailure(command.TransactionId, command.Reason);
         await eventStore.SaveChangesAsync();
     } 
     
-    public async Task HandleAsync(CancelOrderCommand command)
+    public async Task HandleAsync(CancelOrder command)
     {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
+        var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.CancelOrder();
         await eventStore.SaveChangesAsync();
     }
 
-    public async Task HandleAsync(CancelOrderDueToTimeoutCommand command)
+    public async Task HandleAsync(CancelOrderDueToTimeout command)
     {
-        var order = await eventStore.LoadAsync<Order>(command.OrderId);
+        var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.CancelOrderDueToTimeout();
         await eventStore.SaveChangesAsync();
     }
 }
-*/
