@@ -11,28 +11,28 @@ public class OrderCommandHandler
         this.eventStore = eventStore;
     }
 
-    public async Task HandleAsync(AddReservedTicketsCommand command)
+    public async Task HandleAsync(AddReservedTickets command)
     {
         var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.AddReservedTickets(command.ReservedTickets);
         await eventStore.SaveChangesAsync();
     }
 
-    public async Task HandleAsync(ConfirmOrderCommand command)
+    public async Task HandleAsync(ConfirmOrder command)
     {
         var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.ConfirmOrder();
         await eventStore.SaveChangesAsync();
     }
 
-    public async Task HandleAsync(ProcessPaymentSuccessCommand command)
+    public async Task HandleAsync(ProcessPaymentSuccess command)
     {
         var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.ProcessPaymentSuccess(command.TransactionId);
         await eventStore.SaveChangesAsync();
     }
 
-    public async Task HandleAsync(ProcessPaymentFailureCommand command)
+    public async Task HandleAsync(ProcessPaymentFailure command)
     {
         var order = await eventStore.AggregateStreamAsync<Order>(command.OrderId);
         order.ProcessPaymentFailure(command.TransactionId, command.Reason);

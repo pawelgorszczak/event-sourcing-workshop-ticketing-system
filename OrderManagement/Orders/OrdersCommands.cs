@@ -7,7 +7,6 @@ public record ConfirmOrder(string OrderId);
 public record CancelOrder(string OrderId);
 public record CancelOrderDueToTimeout(string OrderId);
 
-public record AddReservedTicketsCommand(string OrderId, IEnumerable<ReservedTicket> ReservedTickets);
-public record ConfirmOrderCommand(string OrderId);
-public record ProcessPaymentSuccessCommand(string OrderId, string TransactionId);
-public record ProcessPaymentFailureCommand(string OrderId, string TransactionId, string Reason);
+public record AddReservedTickets(string OrderId, IEnumerable<ReservedTicket> ReservedTickets);
+public record ProcessPaymentSuccess(string OrderId, string TransactionId);
+public record ProcessPaymentFailure(string OrderId, string TransactionId, string Reason);
